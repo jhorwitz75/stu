@@ -125,6 +125,28 @@ func readCSV(table *tview.Table, filename string) {
 	}
 }
 
+func writeCSV(table *tview.Table, filename string) {
+	f, err := os.Create(filename)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	w := csv.NewWriter(f)
+	defer w.Flush()
+
+	ncols := table.GetColumnCount()
+	for row := 0; row < table.GetRowCount(); row++ {
+		record := make([]string, ncols)
+		for col := 0; col < ncols; col++ {
+			record[col] = table.GetCell(row, col).Text
+		}
+		if err := w.Write(record); err != nil {
+			panic(err)
+		}
+	}
+}
+
 func readPlainText(table *tview.Table, filename string) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -159,12 +181,19 @@ func main() {
 	}
 
 	statusBar := tview.NewTextView().
-		SetTextColor(tcell.ColorRed).
+		SetTextColor(tcell.ColorGreen).
 		SetText("Hello world!")
 
-	var flex = tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(table, 0, 1, true).
-		AddItem(statusBar, 1, 0, false)
+	helpText := tview.NewTextView().
+		SetTextColor(tcell.ColorRed).
+		SetText("(s) split\n(L) Move left\n(R) Move right\n(w) Write CSV\n(q) Quit")
+
+	var flex = tview.NewFlex().
+		AddItem(
+			tview.NewFlex().SetDirection(tview.FlexRow).
+				AddItem(table, 0, 1, true).
+				AddItem(statusBar, 1, 0, false), 0, 2, true).
+		AddItem(helpText, 0, 1, false)
 
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch rune := event.Rune(); rune {
@@ -194,25 +223,7 @@ func main() {
 			pages.SwitchToPage("SplitColumnByStringForm")
 			return nil
 		case 'w':
-			f, err := os.Create(inputFile)
-			if err != nil {
-				panic(err)
-			}
-			defer f.Close()
-
-			w := csv.NewWriter(f)
-			defer w.Flush()
-
-			ncols := table.GetColumnCount()
-			for row := 0; row < table.GetRowCount(); row++ {
-				record := make([]string, ncols)
-				for col := 0; col < ncols; col++ {
-					record[col] = table.GetCell(row, col).Text
-				}
-				if err := w.Write(record); err != nil {
-					panic(err)
-				}
-			}
+			writeCSV(table, inputFile)
 			app.Stop()
 		}
 
