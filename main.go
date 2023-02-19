@@ -1,10 +1,11 @@
 package main
 
 import (
+    "bufio"
     "encoding/csv"
     "flag"
     "fmt"
-    "io/ioutil"
+    "io"
     "log"
     "os"
     "strconv"
@@ -99,35 +100,67 @@ func beep() {
     beeep.Beep(440.0, 200)
 }
 
-func main() {
-    var inputText string
+func readCSV(table *tview.Table, filename string) {
+    file, err := os.Open(filename)
+    if err != nil {
+        log.Fatal(err)
+    }
 
-    flag.Parse()
+    defer file.Close()
 
-    inputFile := flag.Arg(0)
-    if inputFile == "" {
-        inputText = ""
-    } else {
-        content, err := ioutil.ReadFile(inputFile)
+    csvReader := csv.NewReader(file)
+    var rowNum int
+    for {
+        row, err := csvReader.Read()
+        if err == io.EOF {
+            break
+        }
         if err != nil {
             log.Fatal(err)
         }
-
-        inputText = strings.TrimRight(string(content), "\r\n")
+        for colNum, field := range row {
+            table.SetCell(rowNum, colNum, tview.NewTableCell(field))
+        }
+        rowNum++
     }
+}
+
+func readPlainText(table *tview.Table, filename string) {
+    file, err := os.Open(filename)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer file.Close()
+
+    scanner := bufio.NewScanner(file)
+    scanner.Split(bufio.ScanLines)
+
+    var numLines int
+    for scanner.Scan() {
+        table.SetCell(numLines, 0, tview.NewTableCell(scanner.Text()))
+        numLines++
+    }
+}
+
+func main() {
+    flag.Parse()
+
+    inputFile := flag.Arg(0)
 
     table := tview.NewTable().SetBorders(true)
-    table.SetCell(0, 0, tview.NewTableCell(inputText))
     table.SetSelectable(true, true)
+
+    if inputFile == "" {
+        table.SetCell(0, 0, tview.NewTableCell(""))
+    } else if strings.HasSuffix(inputFile, "csv") {
+        readCSV(table, inputFile)
+    } else {
+        readPlainText(table, inputFile)
+    }
 
     statusBar := tview.NewTextView().
         SetTextColor(tcell.ColorRed).
         SetText("Hello world!")
-
-    // BEGIN TEST
-    //form.Clear(true)
-    //splitColumnByStringForm()
-    // END TEST
 
     var flex = tview.NewFlex().SetDirection(tview.FlexRow).
         AddItem(table, 0, 1, true).
