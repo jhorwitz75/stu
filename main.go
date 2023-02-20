@@ -21,9 +21,40 @@ var pages = tview.NewPages()
 var form = tview.NewForm()
 var splitString string = ""
 var splitCols int = 0
+var hasHeader bool = false
+
+// adapted from github.com/jason-meredith/warships
+func columnToBase26(col int) string {
+	results := make([]rune, 0)
+
+	var remainder int
+
+	if col == 0 {
+		return "A"
+	}
+
+	for col > 0 {
+		remainder = col % 26
+		col = col / 26
+		results = append(results, rune(remainder+'A'))
+	}
+
+	for i, j := 0, len(results)-1; i < j; i, j = i+1, j-1 {
+		results[i], results[j] = results[j], results[i]
+	}
+
+	return string(results)
+}
 
 func swapColumns(table *tview.Table, leftCol int, rightCol int) {
-	for row := 0; row < table.GetRowCount(); row++ {
+	var startRow int
+	if hasHeader {
+		startRow = 1
+	} else {
+		startRow = 0
+	}
+
+	for row := startRow; row < table.GetRowCount(); row++ {
 		rightCell := table.GetCell(row, rightCol)
 		temp := table.GetCell(row, leftCol)
 		table.SetCell(row, rightCol, temp)
@@ -31,10 +62,30 @@ func swapColumns(table *tview.Table, leftCol int, rightCol int) {
 	}
 }
 
+func disableHeaderSelection(table *tview.Table) {
+	for col := 0; col < table.GetColumnCount(); col++ {
+		table.GetCell(0, col).SetSelectable(false)
+	}
+}
+
+func toggleHeaderRow(table *tview.Table) {
+	if hasHeader {
+		table.RemoveRow(0)
+		hasHeader = false
+	} else {
+		table.InsertRow(0)
+		for col := 0; col < table.GetColumnCount(); col++ {
+			headerCell := tview.NewTableCell(columnToBase26(col)).SetAlign(tview.AlignCenter)
+			table.SetCell(0, col, headerCell)
+		}
+		hasHeader = true
+	}
+}
+
 func splitColumnByString(table *tview.Table, s string) {
 	_, selectedCol := table.GetSelection()
 	sourceCol := selectedCol
-	for row := 0; row < table.GetRowCount(); row++ {
+	for row := 1; row < table.GetRowCount(); row++ {
 		// get cell contents to split
 		cell := table.GetCell(row, sourceCol)
 
@@ -58,9 +109,10 @@ func splitColumnByString(table *tview.Table, s string) {
 		}
 
 		// at first iteration, insert enough columns for new values
-		if row == 0 {
+		if row == 1 {
 			for i := 0; i < ncols-1; i++ {
 				table.InsertColumn(selectedCol)
+				table.GetCell(0, i).SetSelectable(false)
 			}
 			// also reset the source column, which has now shifted
 			sourceCol = selectedCol + ncols - 1
@@ -136,7 +188,15 @@ func writeCSV(table *tview.Table, filename string) {
 	defer w.Flush()
 
 	ncols := table.GetColumnCount()
-	for row := 0; row < table.GetRowCount(); row++ {
+
+	var startRow int
+	if hasHeader {
+		startRow = 1
+	} else {
+		startRow = 0
+	}
+
+	for row := startRow; row < table.GetRowCount(); row++ {
 		record := make([]string, ncols)
 		for col := 0; col < ncols; col++ {
 			record[col] = table.GetCell(row, col).Text
@@ -171,6 +231,7 @@ func main() {
 
 	table := tview.NewTable().SetBorders(true)
 	table.SetSelectable(true, true)
+	table.SetFixed(1, 0)
 
 	if inputFile == "" {
 		table.SetCell(0, 0, tview.NewTableCell(""))
@@ -180,25 +241,38 @@ func main() {
 		readPlainText(table, inputFile)
 	}
 
+	toggleHeaderRow(table)
+	disableHeaderSelection(table)
+
+	// TODO: add version
+	titleBar := tview.NewTextView().
+		SetTextColor(tcell.ColorWhite).
+		SetText("Stupid Table Utility (STU)")
+
 	statusBar := tview.NewTextView().
 		SetTextColor(tcell.ColorGreen).
 		SetText("Hello world!")
 
 	helpText := tview.NewTextView().
 		SetTextColor(tcell.ColorRed).
-		SetText("(s) split\n(L) Move left\n(R) Move right\n(w) Write CSV\n(q) Quit")
+		SetText("(s) split\n(H) toggle header row\n(L) Move left\n(R) Move right\n(w) Write CSV\n(q) Quit")
 
 	var flex = tview.NewFlex().
-		AddItem(
-			tview.NewFlex().SetDirection(tview.FlexRow).
-				AddItem(table, 0, 1, true).
-				AddItem(statusBar, 1, 0, false), 0, 2, true).
-		AddItem(helpText, 0, 1, false)
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(titleBar, 1, 0, false).
+			AddItem(
+				tview.NewFlex().
+					AddItem(table, 0, 1, true).
+					AddItem(helpText, 0, 1, false), 0, 1, true).
+			AddItem(statusBar, 1, 0, false), 0, 1, true)
 
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch rune := event.Rune(); rune {
 		case 'q':
 			app.Stop()
+		case 'H':
+			toggleHeaderRow(table)
+			disableHeaderSelection(table)
 		case 'L':
 			row, col := table.GetSelection()
 			if col > 0 {
