@@ -233,6 +233,10 @@ func main() {
 	table.SetSelectable(true, true)
 	table.SetFixed(1, 0)
 
+	// this keeps the table width constant when scrolling
+	// TODO: don't do this if row count is too high
+	table.SetEvaluateAllRows(true)
+
 	if inputFile == "" {
 		table.SetCell(0, 0, tview.NewTableCell(""))
 	} else if strings.HasSuffix(inputFile, "csv") {
