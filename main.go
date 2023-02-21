@@ -271,6 +271,10 @@ func main() {
 			AddItem(statusBar, 1, 0, false), 0, 1, true)
 
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if pageName, _ := pages.GetFrontPage(); pageName != "Table" {
+			return event
+		}
+
 		switch rune := event.Rune(); rune {
 		case 'q':
 			app.Stop()
