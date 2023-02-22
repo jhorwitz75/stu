@@ -112,7 +112,7 @@ func splitColumnByString(table *tview.Table, s string) {
 		if row == 1 {
 			for i := 0; i < ncols-1; i++ {
 				table.InsertColumn(selectedCol)
-				table.GetCell(0, i).SetSelectable(false)
+				table.GetCell(0, selectedCol).SetSelectable(false)
 			}
 			// also reset the source column, which has now shifted
 			sourceCol = selectedCol + ncols - 1
@@ -261,6 +261,8 @@ func main() {
 		SetTextColor(tcell.ColorRed).
 		SetText("(s) split\n(H) toggle header row\n(L) Move left\n(R) Move right\n(w) Write CSV\n(q) Quit")
 
+	confirmationModal := tview.NewModal().AddButtons([]string{"Yes", "No"})
+
 	var flex = tview.NewFlex().
 		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
 			AddItem(titleBar, 1, 0, false).
@@ -278,6 +280,18 @@ func main() {
 		switch rune := event.Rune(); rune {
 		case 'q':
 			app.Stop()
+		case 'd':
+			_, col := table.GetSelection()
+			colName := table.GetCell(0, col).Text
+			confirmationModal.
+				SetText(fmt.Sprintf("Really delete column \"%s\"?", colName)).
+				SetDoneFunc(func(_ int, label string) {
+					if label == "Yes" {
+						table.RemoveColumn(col)
+					}
+					pages.HidePage("Confirmation")
+				})
+			pages.ShowPage("Confirmation")
 		case 'H':
 			toggleHeaderRow(table)
 			disableHeaderSelection(table)
@@ -316,8 +330,9 @@ func main() {
 		return event
 	})
 
-	pages.AddPage("Table", flex, true, true)
 	pages.AddPage("SplitColumnByStringForm", form, true, false)
+	pages.AddPage("Table", flex, true, true)
+	pages.AddPage("Confirmation", confirmationModal, true, false)
 
 	app.SetFocus(flex)
 
