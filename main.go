@@ -22,6 +22,7 @@ var form = tview.NewForm()
 var splitString string = ""
 var splitCols int = 0
 var hasHeader bool = false
+var status string = ""
 
 // adapted from github.com/jason-meredith/warships
 func columnToBase26(col int) string {
@@ -255,7 +256,7 @@ func main() {
 
 	statusBar := tview.NewTextView().
 		SetTextColor(tcell.ColorGreen).
-		SetText("Hello world!")
+		SetText(status)
 
 	helpText := tview.NewTextView().
 		SetTextColor(tcell.ColorRed).
@@ -279,7 +280,15 @@ func main() {
 
 		switch rune := event.Rune(); rune {
 		case 'q':
-			app.Stop()
+			confirmationModal.
+				SetText("Really quit?").
+				SetDoneFunc(func(_ int, label string) {
+					if label == "Yes" {
+						app.Stop()
+					}
+					pages.HidePage("Confirmation")
+				})
+			pages.ShowPage("Confirmation")
 		case 'd':
 			_, col := table.GetSelection()
 			colName := table.GetCell(0, col).Text
@@ -324,7 +333,7 @@ func main() {
 		}
 
 		// update status bar
-		statusText := fmt.Sprintf("Hi there. Key code is %d", event.Rune())
+		statusText := fmt.Sprintf(status)
 		statusBar.SetText(statusText)
 
 		return event
