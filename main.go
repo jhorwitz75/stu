@@ -21,7 +21,7 @@ var pages = tview.NewPages()
 var form = tview.NewForm()
 var splitString string = ""
 var splitCols int = 0
-var hasHeader bool = false
+var hasDefaultHeader bool = false
 var status string = ""
 
 // adapted from github.com/jason-meredith/warships
@@ -49,7 +49,7 @@ func columnToBase26(col int) string {
 
 func swapColumns(table *tview.Table, leftCol int, rightCol int) {
 	var startRow int
-	if hasHeader {
+	if hasDefaultHeader {
 		startRow = 1
 	} else {
 		startRow = 0
@@ -63,24 +63,30 @@ func swapColumns(table *tview.Table, leftCol int, rightCol int) {
 	}
 }
 
-func disableHeaderSelection(table *tview.Table) {
+func setRowSelection(table *tview.Table, row int, selectable bool) {
 	for col := 0; col < table.GetColumnCount(); col++ {
-		table.GetCell(0, col).SetSelectable(false)
+		table.GetCell(row, col).SetSelectable(selectable)
+	}
+}
+
+func resetDefaultHeaderValues(table *tview.Table) {
+	for col := 0; col < table.GetColumnCount(); col++ {
+		headerCell := tview.NewTableCell(columnToBase26(col)).SetAlign(tview.AlignCenter)
+		table.SetCell(0, col, headerCell)
 	}
 }
 
 func toggleHeaderRow(table *tview.Table) {
-	if hasHeader {
+	if hasDefaultHeader {
 		table.RemoveRow(0)
-		hasHeader = false
+		hasDefaultHeader = false
 	} else {
 		table.InsertRow(0)
-		for col := 0; col < table.GetColumnCount(); col++ {
-			headerCell := tview.NewTableCell(columnToBase26(col)).SetAlign(tview.AlignCenter)
-			table.SetCell(0, col, headerCell)
-		}
-		hasHeader = true
+		resetDefaultHeaderValues(table)
+		setRowSelection(table, 1, true)
+		hasDefaultHeader = true
 	}
+	setRowSelection(table, 0, false)
 }
 
 func splitColumnByString(table *tview.Table, s string) {
@@ -106,7 +112,7 @@ func splitColumnByString(table *tview.Table, s string) {
 		// stop if we have nothing to split
 		if ncols == 1 {
 			beep()
-			break
+			return
 		}
 
 		// at first iteration, insert enough columns for new values
@@ -125,6 +131,26 @@ func splitColumnByString(table *tview.Table, s string) {
 			table.SetCell(row, col, tview.NewTableCell(parts[i]))
 		}
 	}
+
+	if hasDefaultHeader {
+		resetDefaultHeaderValues(table)
+	}
+}
+
+func pasteContentForm(table *tview.Table) *tview.Form {
+	form.AddTextArea("Text", "", 0, 0, 0, nil)
+	form.AddButton("Ok", func() {
+		text := form.GetFormItem(0).(*tview.TextArea).GetText()
+		for i, line := range strings.Split(text, "\n") {
+			if line != "" {
+				table.SetCell(i, 0, tview.NewTableCell(line))
+			}
+		}
+		toggleHeaderRow(table)
+		pages.SwitchToPage("Table")
+	})
+
+	return form
 }
 
 func splitColumnByStringForm(table *tview.Table) *tview.Form {
@@ -191,7 +217,7 @@ func writeCSV(table *tview.Table, filename string) {
 	ncols := table.GetColumnCount()
 
 	var startRow int
-	if hasHeader {
+	if hasDefaultHeader {
 		startRow = 1
 	} else {
 		startRow = 0
@@ -238,17 +264,6 @@ func main() {
 	// TODO: don't do this if row count is too high
 	table.SetEvaluateAllRows(true)
 
-	if inputFile == "" {
-		table.SetCell(0, 0, tview.NewTableCell(""))
-	} else if strings.HasSuffix(inputFile, "csv") {
-		readCSV(table, inputFile)
-	} else {
-		readPlainText(table, inputFile)
-	}
-
-	toggleHeaderRow(table)
-	disableHeaderSelection(table)
-
 	// TODO: add version
 	titleBar := tview.NewTextView().
 		SetTextColor(tcell.ColorWhite).
@@ -260,7 +275,13 @@ func main() {
 
 	helpText := tview.NewTextView().
 		SetTextColor(tcell.ColorRed).
-		SetText("(s) split\n(H) toggle header row\n(L) Move left\n(R) Move right\n(w) Write CSV\n(q) Quit")
+		SetText("(s) split\n" +
+			"(H) toggle header\n" +
+			"(L) Move left\n" +
+			"(R) Move right\n" +
+			"(d) Delete column\n" +
+			"(w) Write CSV\n" +
+			"(q) Quit")
 
 	confirmationModal := tview.NewModal().AddButtons([]string{"Yes", "No"})
 
@@ -303,7 +324,6 @@ func main() {
 			pages.ShowPage("Confirmation")
 		case 'H':
 			toggleHeaderRow(table)
-			disableHeaderSelection(table)
 		case 'L':
 			row, col := table.GetSelection()
 			if col > 0 {
@@ -339,11 +359,24 @@ func main() {
 		return event
 	})
 
+	pages.AddPage("PasteContentForm", form, true, false)
 	pages.AddPage("SplitColumnByStringForm", form, true, false)
 	pages.AddPage("Table", flex, true, true)
 	pages.AddPage("Confirmation", confirmationModal, true, false)
 
 	app.SetFocus(flex)
+
+	if len(inputFile) == 0 {
+		form.Clear(true)
+		pasteContentForm(table)
+		pages.SwitchToPage("PasteContentForm")
+	} else if strings.HasSuffix(inputFile, "csv") {
+		readCSV(table, inputFile)
+		toggleHeaderRow(table)
+	} else {
+		readPlainText(table, inputFile)
+		toggleHeaderRow(table)
+	}
 
 	if err := app.SetRoot(pages, true).
 		EnableMouse(true).Run(); err != nil {
