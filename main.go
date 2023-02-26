@@ -115,12 +115,23 @@ func splitColumnByString(table *tview.Table, s string) {
 			return
 		}
 
-		// at first iteration, insert enough columns for new values
+		// at first iteration, insert enough columns for new values and
+		// update header values if appropriate
+		sourceHeaderText := table.GetCell(0, selectedCol).Text
 		if row == 1 {
 			for i := 0; i < ncols-1; i++ {
+				if !hasDefaultHeader {
+					newText := fmt.Sprintf("%s.%d", sourceHeaderText, ncols-i)
+					table.GetCell(0, selectedCol+i).SetText(newText)
+				}
 				table.InsertColumn(selectedCol)
 				table.GetCell(0, selectedCol).SetSelectable(false)
 			}
+
+			// don't forget the last inserted column
+			newText := fmt.Sprintf("%s.1", sourceHeaderText)
+			table.GetCell(0, selectedCol).SetText(newText)
+
 			// also reset the source column, which has now shifted
 			sourceCol = selectedCol + ncols - 1
 		}
